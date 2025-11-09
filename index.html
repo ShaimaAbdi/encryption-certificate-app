@@ -116,6 +116,13 @@
             margin-right: 4px;
             font-size: 14px;
         }
+
+    }
+    h2 {
+        text-align: center;
+        font-weight: 600;
+        margin-top: 40px;
+        color: var(--accent);
     }
 </style>
 </head>
@@ -158,9 +165,10 @@
 
         <div class="label" style="margin-top:20px;">Certificate Viewer</div>
         <textarea id="certViewer" rows="6" readonly></textarea>
+       
     </div>
 </div>
-
+ <h2> Crafted by Group C🪄</h2>
 <script>
 // AES encrypt/decrypt using Web Crypto API (per MDN recommendation)
 // Source: MDN Web Crypto API usage guide 
@@ -237,6 +245,8 @@ function loadSampleCert() {
     document.getElementById("certInput").value = "-----BEGIN CERTIFICATE----- MOCK -----END CERTIFICATE-----";
 }
 </script>
+
+
 
 </body>
 </html>
