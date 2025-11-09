@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AES Encrypt / Decrypt + X.509 Mock</title>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;500;600&display=swap" rel="stylesheet">
+
+<style>
+    :root {
+        --primary: #6c5ce7;
+        --accent: #00cec9;
+        --bg: #0b0f19;
+        --glass: rgba(255,255,255,0.08);
+    }
+
+    body {
+        font-family: "Poppins", sans-serif;
+        background: radial-gradient(circle at top, #1b1f2f, #090b12 70%);
+        color: #fff;
+        margin: 0;
+        padding: 40px;
+    }
+
+    h1 {
+        text-align: center;
+        font-weight: 600;
+        margin-bottom: 40px;
+        color: var(--accent);
+    }
+
+    .container {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 25px;
+        max-width: 1200px;
+        margin: auto;
+    }
+
+    .glass-card {
+        background: var(--glass);
+        padding: 25px;
+        border-radius: 18px;
+        backdrop-filter: blur(18px);
+        border: 1px solid rgba(255,255,255,0.18);
+        box-shadow: 0 0 25px rgba(0,255,255,0.15);
+    }
+
+    textarea, input {
+        width: 100%;
+        padding: 5px;
+        border-radius: 12px;
+        background: rgba(255,255,255,0.08);
+        border: none;
+        color: white;
+        resize: none;
+        margin-top: 8px;
+        font-family: "Poppins";
+    }
+
+    .btn {
+        padding: 12px 22px;
+        border-radius: 12px;
+        border: none;
+        cursor: pointer;
+        margin-right: 6px;
+        font-weight: 600;
+        transition: 0.3s;
+        background: var(--primary);
+        color: white;
+    }
+
+    .btn:hover {
+        background: var(--accent);
+        transform: translateY(-2px);
+    }
+
+    .badge-valid {
+        display: inline-block;
+        background: #00b894;
+        padding: 7px 12px;
+        border-radius: 8px;
+        font-size: 12px;
+        font-weight: 600;
+        margin-left: 6px;
+    }
+
+    .label {
+        font-size: 14px;
+        margin-bottom: 6px;
+        font-weight: 500;
+    }
+
+    /* Responsive design */
+    @media (max-width: 768px) {
+        body {
+            padding: 20px;
+        }
+
+        h1 {
+            font-size: 24px;
+            margin-bottom: 20px;
+        }
+
+        .container {
+            grid-template-columns: 1fr;
+            gap: 20px;
+        }
+
+        .glass-card {
+            padding: 20px;
+        }
+
+        .btn {
+            padding: 10px 18px;
+            margin-right: 4px;
+            font-size: 14px;
+        }
+    }
+</style>
+</head>
+
+<body>
+
+<h1>AES Encryption + X.509 Verification</h1>
+
+<div class="container">
+
+    <!-- AES Panel -->
+    <div class="glass-card">
+        <div class="label">Plain Text</div>
+        <textarea id="plaintext" rows="5"></textarea>
+
+        <div class="label">Key (Passphrase)</div>
+        <input type="password" id="key"/>
+
+        <br><br>
+        <button class="btn" onclick="encryptAES()">Encrypt</button>
+        <button class="btn" onclick="decryptAES()">Decrypt</button>
+
+        <div class="label" style="margin-top: 18px;">Cipher Text (Base64)</div>
+        <textarea id="ciphertext" rows="5"></textarea>
+    </div>
+
+    <!-- Certificate Panel -->
+    <div class="glass-card">
+        <div class="label">Certificate (Mock X.509)</div>
+        <input id="certInput" placeholder="Paste certificate value (optional)" />
+
+        <br><br>
+        <button class="btn" onclick="verifyCert()">Verify Certificate</button>
+        <button class="btn" onclick="loadSampleCert()">Load Sample</button>
+
+        <br><br>
+        <div id="certStatus" class="badge-valid" style="display:none;">
+            Certificate Valid
+        </div>
+
+        <div class="label" style="margin-top:20px;">Certificate Viewer</div>
+        <textarea id="certViewer" rows="6" readonly></textarea>
+    </div>
+</div>
+
+<script>
+// AES encrypt/decrypt using Web Crypto API (per MDN recommendation)
+// Source: MDN Web Crypto API usage guide 
+async function getKeyFromPassphrase(pass) {
+    const enc = new TextEncoder();
+    const keyMaterial = await crypto.subtle.importKey(
+        "raw",
+        enc.encode(pass),
+        { name: "PBKDF2" },
+        false,
+        ["deriveKey"]
+    );
+
+    return crypto.subtle.deriveKey(
+        {
+            name: "PBKDF2",
+            salt: enc.encode("fixed-salt"),
+            iterations: 100000,
+            hash: "SHA-256",
+        },
+        keyMaterial,
+        { name: "AES-GCM", length: 256 },
+        false,
+        ["encrypt", "decrypt"]
+    );
+}
+
+async function encryptAES() {
+    const plaintext = document.getElementById("plaintext").value;
+    const pass = document.getElementById("key").value;
+    if (!pass) return alert("Enter a key");
+
+    const key = await getKeyFromPassphrase(pass);
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const enc = new TextEncoder();
+    const encrypted = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, enc.encode(plaintext));
+
+    const buff = new Uint8Array([...iv, ...new Uint8Array(encrypted)]);
+    document.getElementById("ciphertext").value = btoa(String.fromCharCode(...buff));
+}
+
+async function decryptAES() {
+    const cipherBase64 = document.getElementById("ciphertext").value;
+    const pass = document.getElementById("key").value;
+    if (!pass) return alert("Enter a key");
+
+    const bytes = Uint8Array.from(atob(cipherBase64), c => c.charCodeAt(0));
+
+    const iv = bytes.slice(0, 12);
+    const encrypted = bytes.slice(12);
+
+    const key = await getKeyFromPassphrase(pass);
+    const result = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, encrypted);
+
+    document.getElementById("plaintext").value = new TextDecoder().decode(result);
+}
+
+/*** MOCK CERTIFICATE VERIFICATION SECTION ***/
+function verifyCert() {
+    const cert = document.getElementById("certInput").value;
+
+    if (cert.trim() === "") {
+        alert("No certificate — failed.");
+        return;
+    }
+
+    document.getElementById("certViewer").value =
+        "✅ User certificate accepted.\n(This is a MOCK — no real crypto validation performed.)";
+
+    document.getElementById("certStatus").style.display = "inline-block";
+}
+
+function loadSampleCert() {
+    document.getElementById("certInput").value = "-----BEGIN CERTIFICATE----- MOCK -----END CERTIFICATE-----";
+}
+</script>
+
+</body>
+</html>
